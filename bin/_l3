@@ -1,0 +1,266 @@
+#!/usr/bin/env node --harmony
+'use strict';
+
+/**
+ * Module dependencies.
+ */
+
+const common = require('../lib/common');
+const mkdirp = require('mkdirp').sync;
+const spawn = require('child_process').spawn;
+const which = require('which').sync;
+const argv = require('minimist')(process.argv.slice(2))
+const pkg = require('../package');
+const fs = require('fs');
+const l3 = require('../lib');
+
+const EDITOR = (
+  process.env.EDITOR || 'vi'
+);
+
+/**
+ * Outputs program usage.
+ */
+
+const usage = m => console[m || 'log']([
+  'usage: l3 [-hV] <command> [options]'
+].join('\n'));
+
+/**
+ * Outouts program version.
+ */
+
+const version = _ => console.log("l3@v%s", pkg.version);
+
+/**
+ * Prints an error to stderr.
+ */
+
+const perror = e => console.error("error: %s", e);
+
+/**
+ * Prints useful formatted info to stdout.
+ */
+
+const info = _ => (
+  console.log.apply(console, ["info: " +arguments[0]].concat(
+    [].slice.call(arguments, 1)
+  ))
+);
+
+/**
+ * Prints an error to stderr and exits with
+ * code 1
+ */
+
+const fatal = e => (perror(e), process.exit(1));
+
+/**
+ * Handles `l3 sync` command.
+ */
+
+const sync = _ => {
+  setup();
+  const opts = {
+    bucket: argv.b || argv.namespace,
+    name: argv.n || argv.name,
+    url: argv.f || argv.file || argv._,
+  };
+
+  try {
+    l3.sync(opts, err => {
+      if (err) fatal(err.message);
+      else { console.log("sync complete."); }
+    });
+  } catch (e) { fatal(e); }
+};
+
+/**
+ * Handles `l3 server` command.
+ */
+
+const server = _ => {
+  setup();
+  const opts = {
+    port: argv.p || argv.port
+  };
+  l3.server(opts, err => {
+    if (err) fatal(err);
+  });
+};
+
+/**
+ * Handles `l3 expire` command.
+ */
+
+const expire = _ => {
+  // @TODO(werle)
+};
+
+/**
+ * Handles `l3 update` command.
+ */
+
+const update = _ => {
+  setup();
+  const opts = {
+    mimetype: argv.m || argv.mimetype,
+    bucket: argv.b || argv.namespace,
+    file: argv.n || argv.name
+  };
+  l3.update(opts, err => {
+    if (err) fatal(err);
+  });
+};
+
+/**
+ * Handles `l3 purge` command.
+ */
+
+const purge = _ => {
+  setup();
+  const opts = {
+    bucket: argv.b || argv.namespace,
+  };
+  l3.purge(opts);
+};
+
+/**
+ * Handles `l3 remove` command.
+ */
+
+const remove = _ => {
+  setup();
+  const opts = {
+    bucket: argv.b || argv.bucket,
+    file: argv.f || argv.file
+  };
+  const file = [opts.bucket, opts.file].filter(Boolean).join('/');
+  l3.remove(file);
+};
+
+/**
+ * Handles `l3 list` command.
+ */
+
+const list = _ => {
+  setup();
+  const opts = {
+    bucket: argv.b || argv.bucket || argv._[0],
+    long: argv.l || argv.long,
+    full: argv.f || argv.full
+  };
+  l3.list(opts).forEach(item => {
+    if (opts.long) {
+      console.log("-- %s (%s)\t%s",
+                  Date(item.timestamp),
+                  item.mimetype,
+                  opts.bucket ? item.filename : item.path);
+    } else {
+      if (opts.full) console.log(item.path);
+      else console.log("%s", opts.bucket ? item.filename : item.path);
+    }
+  });
+};
+
+/**
+ * Handles `l3 index` command.
+ */
+
+const index = _ => {
+  spawn(EDITOR, [l3.L3_INDEX], {stdio: 'inherit'});
+};
+
+/**
+ * Handles `l3 which` command.
+ */
+
+const l3which = _ => {
+  const opts = {
+    file: argv.f || argv.file || argv._[0]
+  };
+  try {
+    const resolved = l3.which(opts);
+    if (resolved) console.log(resolved);
+    else process.exit(1);
+
+   }
+  catch (e) { fatal(e.message); }
+};
+
+/**
+ * Handles `l3 setup` command.
+ */
+
+const setup = _ => {
+  // attempt to build root directory
+  try { fs.readdirSync(l3.L3_ROOT); }
+  catch (e) {
+    info("Creating l3 root => `%s'", l3.L3_ROOT);
+    try { mkdirp(l3.L3_ROOT); }
+    catch (e) { fatal(e); }
+  }
+
+  // create index
+  try { fs.statSync(l3.L3_INDEX); }
+  catch (e) {
+    info("Creating l3 index => `%s'", l3.L3_INDEX);
+    try { fs.writeFileSync(l3.L3_INDEX, JSON.stringify({})); }
+    catch (e) { fatal(e); }
+  }
+};
+
+/**
+ * Handles `l3 init` command.
+ */
+
+const init = _ => {
+  const env = Object.keys(common)
+  .filter(k => Boolean(k.match(/^L3_/)))
+  .map(k => [k, common[k]].join('=')).join('\n');
+  console.log(env);
+};
+
+/*
+ * Main.
+ */
+
+const main = () => {
+  const cmd = argv._.shift();
+  switch (cmd) {
+    // opts
+    case '-h': usage(); break;
+    case '-V': version(); break;
+
+    // commands
+    case 'expire': expire(); break;
+    case 'server': server(); break;
+    case 'update': update(); break;
+    case 'purge': purge(); break;
+    case 'index': index(); break;
+    case 'setup': setup(); break;
+    case 'which': l3which(); break;
+    case 'sync': sync(); break;
+    case 'init': init(); break;
+    case 'list': list(); break;
+    case 'ls': list(); break;
+
+    // catch all for plugins, etc
+    default:
+      if (cmd) {
+        let child = null;
+        let args = process.argv.slice(process.argv.indexOf(cmd) + 1);
+        try { child = which('l3-'+cmd); }
+        catch (e) {}
+        if (child) {
+          spawn(child, args, {stdio: 'inherit'});
+        } else {
+          perror("Unknown command `%s'", cmd);
+          usage('error');
+          process.exit(1);
+        }
+      } else {
+        usage();
+      }
+  }
+}();

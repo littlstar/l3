@@ -1,0 +1,15 @@
+#!/usr/bin/env node --harmony
+'use strict';
+
+try {
+  require('assert')(
+    Number(process.version.split('.')[1]) >= 11,
+    "l3 requires node v0.11 or greater."
+  );
+  require('child_process').spawn(
+    __dirname +'/_l3',
+    process.argv.slice(2),
+    { stdio: 'inherit'}
+  ).on('exit', code => process.exit(code));
+} catch (e) { console.error('Error: %s', e.message); }
+
