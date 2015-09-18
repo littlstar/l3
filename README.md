@@ -6,7 +6,7 @@ Dead simple local cdn.
 
 `l3` is an easy to use local cdn for when your on the move and just
 can't stand bad internet. l3 wants to help ease your development pain by
-keeping files you'd access on the web local local on your filesystem.
+keeping files you'd access on the web local on your filesystem.
 l3 maintains a directory structure for you and allows you to sync files
 with no effort. l3 will help you maintain the lifetime of these files by
 providing easy mechanisms for expiration and purging.
