@@ -2,8 +2,9 @@
 'use strict';
 
 try {
+  var semver = require('semver');
   require('assert')(
-    Number(process.version.split('.')[1]) >= 11,
+    semver.gte(process.versions.node, '0.11.0'),
     "l3 requires node v0.11 or greater."
   );
   require('child_process').spawn(
