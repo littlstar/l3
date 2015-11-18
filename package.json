@@ -1,6 +1,6 @@
 {
   "name": "l3",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Dead simple local cdn",
   "main": "lib/index.js",
   "preferGlobal": true,
